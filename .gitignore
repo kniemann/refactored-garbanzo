@@ -41,4 +41,5 @@ project/plugins/project/
 .history
 .cache
 .lib/
+spark-warehouse
 
