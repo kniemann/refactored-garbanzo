@@ -18,6 +18,9 @@ class PublishImages {
 }
 object PublishImages {
   val logger = Logger(this.getClass)
+  val producer = KafkaProducer(
+    Conf(new StringSerializer(), new ByteArraySerializer(), bootstrapServers = "localhost:9092")
+  )
   def main(args: Array[String]): Unit = {
     if (args.length != 3) {
       println("Usage: <dir> <broker> <topic>")
@@ -30,11 +33,11 @@ object PublishImages {
     val imagePath = "/home/kevin/Downloads/grace_hopper.jpg"
     val imageBytes = Files.readAllBytes(Paths.get(imagePath))
 
-    val producer = KafkaProducer(
-      Conf(new StringSerializer(), new ByteArraySerializer(), bootstrapServers = "localhost:9092")
-    )
-    val record = KafkaProducerRecord("images", Some(imagePath), imageBytes)
-    println(s"Sending record to ${record.topic()}")
+
+  }
+  def publishImage(imageBytes : Array[Byte], description: String): Unit = {
+    val record = KafkaProducerRecord("images", Some(description), imageBytes)
+    logger.info(s"Sending record to ${record.topic()}")
 
     val done = producer.send(record)
 
@@ -44,5 +47,4 @@ object PublishImages {
       case Failure(t) => logger.error("An error has occured: " + t.getMessage)
     }
   }
-
 }

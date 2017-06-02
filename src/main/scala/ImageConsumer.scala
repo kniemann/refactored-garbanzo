@@ -35,24 +35,11 @@ trait ImageConsumerTrait {
 
     private val offset = new AtomicLong
 
-//    def save(record: ConsumerRecord[Array[Byte], String]): Future[Done] = {
-//      println(s"Kafka message: ${record.key} / ${record.value}")
-//      offset.set(record.offset)
-//      Future.successful(Done)
-//    }
-
     def loadOffset(): Future[Long] =
       Future.successful(offset.get)
 
     def update(data: ConsumerRecord[String, Array[Byte]]): Future[Done] = {
       println(s"Received ${data.key} / ${data.value}")
-      Future.successful(Done)
-    }
-  }
-
-  class Rocket {
-    def launch(destination: String): Future[Done] = {
-      println(s"Rocket launched to $destination")
       Future.successful(Done)
     }
   }
@@ -75,17 +62,17 @@ object ImageConsumer extends ImageConsumerTrait {
     val imageConsumer = new ImageConsumerClass
 
     val done =
-      Consumer.committableSource(consumerSettings, Subscriptions.topics("images"))
+      Consumer.committableSource(consumerSettings, Subscriptions.topics("images,upload_images"))
         .mapAsync(1) { msg =>
-          val prediction = LabelImage.labelImageFromBytes(msg.record.value())
+          logger.info(s"Received Kafka message: ${msg.record.key()} / size of ${msg.record.value.length}")
+         val prediction = LabelImage.labelImageFromBytes(msg.record.value())
             .map(guess => (msg.record.key, guess))
-          msg.committableOffset.commitScaladsl
-          prediction
+         Future{msg}
         }
-//        .mapAsync(1) { msg =>one
-//          msg.committableOffset.commitScaladsl()
-//        }
-        .runWith(Sink.foreach(msg => println(s"D? ${msg}")))
+        .mapAsync(1) { msg =>
+          msg.committableOffset.commitScaladsl()
+        }
+        .runWith(Sink.ignore)
     // #atLeastOnce
 
     terminateWhenDone(done)

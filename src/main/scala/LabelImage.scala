@@ -1,16 +1,22 @@
 import java.io.{IOException, PrintStream}
 import java.nio.charset.Charset
+
 import org.tensorflow._
 import java.nio.file.{Files, Path, Paths}
 import java.util
+
+import akka.actor.Actor
 import com.typesafe.scalalogging.Logger
+
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by kevin on 5/16/17.
   */
-object LabelImage {
+case class LabelImageRequest(description: String, imageBytes: Array[Byte])
+
+object LabelImage extends Actor {
   val logger = Logger(this.getClass)
 
   def main(args: Array[String]): Unit = {
@@ -188,5 +194,8 @@ object LabelImage {
     } finally if (g != null) g.close
   }
 
-
+  override def receive: Receive = {
+    case LabelImageRequest(description, imageBytes) => logger.info("received test")
+    case _      => logger.info("received unknown message")
+  }
 }
