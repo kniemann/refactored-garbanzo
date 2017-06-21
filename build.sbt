@@ -9,14 +9,14 @@ resolvers += Resolver.bintrayRepo("cakesolutions", "maven")
 
 libraryDependencies ++= {
 
-  val akkaVersion = "2.5.1"
+  val akkaVersion = "2.5.3"
   val akkaHttpVersion = "10.0.6"
   val reactiveKafkaVersion = "0.16"
   val kafkaVersion = "0.10.2.1"
   val playVersion = "2.5.15"
   val scalatestVersion = "3.0.1"
   val sparkVersion = "2.1.1"
-  val tensorflowVersion = "1.2.0-rc0"
+  val tensorflowVersion = "1.2.0"
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,

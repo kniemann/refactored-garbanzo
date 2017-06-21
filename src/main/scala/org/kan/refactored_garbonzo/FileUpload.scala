@@ -1,3 +1,5 @@
+package org.kan.refactored_garbonzo
+
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.http.scaladsl.Http
@@ -11,6 +13,8 @@ import akka.kafka.scaladsl.Producer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import com.github.nscala_time.time.Imports._
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
 
 object FileUpload extends App {
 
@@ -23,6 +27,13 @@ object FileUpload extends App {
   val producerSettings = ProducerSettings(system, new StringSerializer, new ByteArraySerializer)
     .withBootstrapServers("localhost:9092")
 
+  implicit val documentFormatter: Format[ImageMetadata] = (
+    (__ \ "imageName").format[String] and
+      (__ \ "imageSize").format[Int] and
+      (__ \ "source").format[String] and
+      (__ \ "requestTime").format[DateTime]
+    ) (ImageMetadata.apply, unlift(ImageMetadata.unapply))
+
   val routes = {
     pathSingleSlash {
       (post & extractRequest) {
@@ -32,8 +43,12 @@ object FileUpload extends App {
           val done = source
             .map { elem =>
             logger.info(s"Received ${elem.size} bytes with image name $imageName.")
-            ImageMetadata(imageName, elem.size, "rest_api",DateTime.now)
-            new ProducerRecord[String, Array[Byte]]("upload_images",imageName, elem.toArray)
+            val imageMetadata = ImageMetadata(imageName, elem.size, "rest_api", DateTime.now)
+
+
+            val json = Json.toJson(imageMetadata).toString
+            logger.info(s"Converted to json $json")
+            new ProducerRecord[String, Array[Byte]]("upload_images", json, elem.toArray)
             }
             .runWith(Producer.plainSink(producerSettings))
             .map(_ => s"Finished uploading!")

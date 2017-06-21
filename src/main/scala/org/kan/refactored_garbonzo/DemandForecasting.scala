@@ -1,11 +1,13 @@
+package org.kan.refactored_garbonzo
+
 /**
   * Created by kevin on 4/30/17.
   */
-class DemandForecasting {
+class RefactoredGarbonzo {
 
 }
 
-object DemandForecasting {
+object RefactoredGarbonzo {
   def main(args: Array[String]): Unit = {
 
   }
