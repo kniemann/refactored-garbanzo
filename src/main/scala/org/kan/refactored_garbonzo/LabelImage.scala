@@ -16,7 +16,10 @@ object LabelImage {
       val modelDir = "/home/kevin/Git/javasandbox/tensorflow/src/main/resources/inception"
       val graphDef = readAllBytesOrExit(Paths.get(modelDir, "tensorflow_inception_graph.pb"))
       val labels = readAllLinesOrExit(Paths.get(modelDir, "imagenet_comp_graph_label_strings.txt"))
-      logger.info(s"Labeling image with length ${imageBytes.length}")
+      val md = java.security.MessageDigest.getInstance("SHA-1")
+      val ha = new sun.misc.BASE64Encoder().encode(md.digest(imageBytes))
+
+    logger.info(s"Labeling image with length ${imageBytes.length} hash $ha")
       val normalizedImage = constructAndExecuteGraphToNormalizeImage(imageBytes)
       normalizedImage match {
         case Some(image) =>

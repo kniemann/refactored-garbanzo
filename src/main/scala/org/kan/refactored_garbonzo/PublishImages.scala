@@ -32,6 +32,7 @@ object PublishImages {
     (__ \ "imageName").format[String] and
       (__ \ "imageSize").format[Int] and
       (__ \ "source").format[String] and
+      (__ \ "uuid").format[String] and
       (__ \ "requestTime").format[DateTime]
     ) (ImageMetadata.apply, unlift(ImageMetadata.unapply))
 
@@ -52,7 +53,13 @@ object PublishImages {
 
   }
   def publishImage(imageBytes : Array[Byte], description: String): Unit = {
-    val imageMetadata = ImageMetadata(description, imageBytes.length, "file_api", DateTime.now)
+    val imageUUID = java.util.UUID.randomUUID.toString
+    val imageMetadata = ImageMetadata(
+      description,
+      imageBytes.length,
+      "file_api",
+      imageUUID,
+      DateTime.now)
     val json = Json.toJson(imageMetadata).toString
     logger.info(s"Converted metadata to json $json with payload containing ${imageBytes.length} bytes.")
 

@@ -1,8 +1,10 @@
 package org.kan.refactored_garbonzo
 
 import java.util.concurrent.atomic.AtomicLong
+
 import akka.Done
 import akka.actor.ActorSystem
+import akka.kafka.ConsumerMessage.CommittableOffsetBatch
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.{ConsumerSettings, Subscriptions}
 import akka.stream.ActorMaterializer
@@ -11,8 +13,9 @@ import com.fasterxml.jackson.core.JsonParseException
 import com.typesafe.scalalogging.Logger
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
-import play.api.libs.json.{Format, Json, __}
-import scala.concurrent.{Await, ExecutionContextExecutor, Future}
+import play.api.libs.json.{Format, JsResultException, Json, __}
+
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 import com.github.nscala_time.time.Imports.DateTime
 import play.api.libs.functional.syntax.unlift
@@ -69,22 +72,13 @@ object ImageConsumer extends ImageConsumerTrait {
       (__ \ "imageName").format[String] and
         (__ \ "imageSize").format[Int] and
         (__ \ "source").format[String] and
+        (__ \ "uuid").format[String] and
         (__ \ "requestTime").format[DateTime]
       ) (ImageMetadata.apply, unlift(ImageMetadata.unapply))
 
-
-
-//    val done = Consumer.committablePartitionedSource(consumerSettings, Subscriptions.topics("topic1"))
-//      .flatMapMerge(maxPartitions, _._2)
-//      .via(business)
-//      .batch(max = 20, first => CommittableOffsetBatch.empty.updated(first.committableOffset)) { (batch, elem) =>
-//        batch.updated(elem.committableOffset)
-//      }
-//      .mapAsync(3)(_.commitScaladsl())
-//      .runWith(Sink.ignore)
-
     val done =
-      Consumer.committableSource(consumerSettings, Subscriptions.topics("images","upload_images"))
+      Consumer.committablePartitionedSource(consumerSettings, Subscriptions.topics("images","upload_images"))
+        .flatMapMerge(maxPartitions, _._2)
         .mapAsync(1) { msg =>
           //Read metadata object as json
          val imageMetadataOpt: Option[ImageMetadata] = try {
@@ -94,6 +88,10 @@ object ImageConsumer extends ImageConsumerTrait {
              logger.error(s"Unable to parse JSON metadata: $parseException")
              None
            }
+           case jsException: JsResultException => logger.error("Field missing from JSON:",jsException)
+             None
+           case e@_ => logger.error("Unknown exception",e)
+             None
          }
          imageMetadataOpt match {
             case Some(imageMetadata) => {
@@ -101,7 +99,7 @@ object ImageConsumer extends ImageConsumerTrait {
               val prediction = LabelImage.labelImageFromBytes(msg.record.value())
                 .map(guess => (msg.record.key, guess))
               prediction match {
-                case result => logger.info(s"Prediction is ${result}")
+                case Some(result) => logger.info(s"Prediction is ${result}")
                 case o@_ => logger.info(s"Unable to find result: $o")
               }
             }
@@ -109,9 +107,10 @@ object ImageConsumer extends ImageConsumerTrait {
          }
          Future{msg}
         }
-        .mapAsync(1) { msg =>
-          msg.committableOffset.commitScaladsl()
+        .batch(max = 20, first => CommittableOffsetBatch.empty.updated(first.committableOffset)) { (batch, elem) =>
+          batch.updated(elem.committableOffset)
         }
+        .mapAsync(3)(_.commitScaladsl())
         .runWith(Sink.ignore)
     terminateWhenDone(done)
   }

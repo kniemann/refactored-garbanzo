@@ -1,3 +1,4 @@
+
 name := """demand_forecasting"""
 
 version := "1.0"
@@ -6,13 +7,15 @@ scalaVersion := "2.11.11"
 
 resolvers += "Apache Snapshot Repository" at "https://repository.apache.org/snapshots"
 resolvers += Resolver.bintrayRepo("cakesolutions", "maven")
+resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
 
 libraryDependencies ++= {
 
   val akkaVersion = "2.5.3"
-  val akkaHttpVersion = "10.0.6"
+  val akkaHttpVersion = "10.0.8"
   val reactiveKafkaVersion = "0.16"
   val kafkaVersion = "0.10.2.1"
+  val scalaKafkaClientVersion = "0.10.2.2"
   val playVersion = "2.5.15"
   val scalatestVersion = "3.0.1"
   val sparkVersion = "2.1.1"
@@ -35,12 +38,15 @@ libraryDependencies ++= {
     "org.apache.spark" % "spark-mllib_2.11" % sparkVersion,
     "org.tensorflow" % "tensorflow" % tensorflowVersion,
     "com.fasterxml.jackson.module" % "jackson-module-scala_2.11" % "2.8.8",
-    "net.cakesolutions" %% "scala-kafka-client" % kafkaVersion,
+    "net.cakesolutions" %% "scala-kafka-client" % scalaKafkaClientVersion,
     "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
     "com.fasterxml.jackson.core" % "jackson-databind" % "2.8.8",
     "com.drewnoakes" % "metadata-extractor" % "2.10.1",
     "com.github.nscala-time" %% "nscala-time" % "2.16.0"
   )
 }
+
+lazy val root = (project in file(".")).enablePlugins(PlayScala)
+
 
 fork in run := true
