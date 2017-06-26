@@ -115,12 +115,13 @@ class HomeController @Inject() (implicit val messagesApi: MessagesApi, ec: Execu
    * @return
    */
   def upload = Action(parse.multipartFormData(handleFilePartAsFile)) { implicit request =>
-    val fileOption = request.body.file("name").map {
+    val fileOption = request.body.file("Location:").map {
       case FilePart(key, filename, contentType, file) =>
-        logger.info(s"key = ${key}, filename = ${filename}, contentType = ${contentType}, file = $file")
+        val description = request.body.asFormUrlEncoded.get("Description:").get.head
+        logger.info(s"key = ${key}, filename = ${filename}, contentType = ${contentType}, file = $file description = $description")
         val imageUUID = java.util.UUID.randomUUID.toString
         val imageBytes = Files.readAllBytes(file.toPath)
-        val metadata = ImageMetadata(filename,Files.size(file.toPath).toInt,"webapp",imageUUID,DateTime.now)
+        val metadata = ImageMetadata(description,Files.size(file.toPath).toInt,"webapp",imageUUID,DateTime.now)
         val json = Json.toJson(metadata).toString
         logger.info(s"Converted to json $json")
         val record = KafkaProducerRecord("upload_images", json, imageBytes)

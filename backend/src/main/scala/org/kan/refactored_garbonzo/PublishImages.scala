@@ -37,18 +37,21 @@ object PublishImages {
     ) (ImageMetadata.apply, unlift(ImageMetadata.unapply))
 
   def main(args: Array[String]): Unit = {
-//    if (args.length != 3) {
-//      println("Usage: <dir> <broker> <topic>")
-//      System.exit(1)
-//    }
+    if (args.length != 2) {
+      println("Usage: <image path> <description>")
+      System.exit(1)
+    }
 //    val imageDir = args(0)
 //    val kafkaBroker = args(1)
 //    val topic = args(2)
 
+    val imagePath = args(0)
+    val description = args(1)
+
     //val imagePath = "/home/kevin/Downloads/grace_hopper.jpg"
-    val imagePath = "/home/kevin/git/tensorflow_scala/src/main/resources/flower_photos/daisy/5547758_eea9edfd54_n.jpg"
+//    val imagePath = "/home/kevin/git/tensorflow_scala/src/main/resources/flower_photos/daisy/5547758_eea9edfd54_n.jpg"
     val imageBytes = Files.readAllBytes(Paths.get(imagePath))
-    publishImage(imageBytes,"Grace Hopper")
+    publishImage(imageBytes,description)
 
 
   }
