@@ -4,8 +4,8 @@
 * two arguments, a `String` for the title of the page and an `Html`
 * object to insert into the body of the page.
 *@
-@import com.datastax.driver.core.ResultSet
-@(rs: ResultSet)
+@import com.datastax.driver.core.Row
+@(buffer: scala.collection.mutable.Buffer[Row])
 
 <!DOCTYPE html>
 <html lang="en">
@@ -36,7 +36,7 @@
                 <th>request_time</th>
                 <th>source</th>
             </tr>
-            @for(row <- rs.all){
+            @for(row <- buffer){
             <tr>
                 <td>@row.getUUID("uuid").toString</td>
                 <td>@row.getString("image_name")</td>

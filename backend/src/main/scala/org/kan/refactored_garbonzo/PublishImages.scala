@@ -1,5 +1,6 @@
 package org.kan.refactored_garbonzo
 
+import java.io.File
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
 
@@ -50,10 +51,24 @@ object PublishImages {
 
     //val imagePath = "/home/kevin/Downloads/grace_hopper.jpg"
 //    val imagePath = "/home/kevin/git/tensorflow_scala/src/main/resources/flower_photos/daisy/5547758_eea9edfd54_n.jpg"
-    val imageBytes = Files.readAllBytes(Paths.get(imagePath))
-    publishImage(imageBytes,description)
+    val pattern = """(.*)\*$""".r
 
-
+    imagePath match {
+      case pattern(dir, _*) => {
+        logger.info(s"Scanning $dir")
+        val path = new File(dir)
+        val listFiles = listAllFiles(path)
+        val listJpg = listFiles.filter(f => isJpg(f.toString) || isJpeg(f.toString))
+        listJpg.foreach( file => {
+          val imageBytes = Files.readAllBytes(file.toPath)
+          publishImage(imageBytes,file.getName)
+        })
+      }
+      case _ => {
+        val imageBytes = Files.readAllBytes(Paths.get(imagePath))
+        publishImage(imageBytes,description)
+      }
+    }
   }
   def publishImage(imageBytes : Array[Byte], description: String): Unit = {
     val imageUUID = java.util.UUID.randomUUID.toString
@@ -79,4 +94,10 @@ object PublishImages {
       case Failure(t) => logger.error("An error has occured: " + t.getMessage)
     }
   }
+  def listAllFiles(file: File): Array[File] = {
+    val list = file.listFiles
+    list ++ list.filter(_.isDirectory).flatMap(listAllFiles)
+  }
+  def isJpg(fileName: String) : Boolean = fileName.toLowerCase.endsWith(".jpg")
+  def isJpeg(fileName: String) : Boolean = fileName.toLowerCase.endsWith(".jpeg")
 }

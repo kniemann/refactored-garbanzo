@@ -5,7 +5,9 @@ import java.nio.file.attribute.PosixFilePermission._
 import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Path}
 import java.util
+import java.util.Collections
 import javax.inject._
+
 import akka.stream.IOResult
 import akka.stream.scaladsl._
 import akka.util.ByteString
@@ -17,16 +19,19 @@ import play.api.libs.streams._
 import play.api.mvc.MultipartFormData.FilePart
 import play.api.mvc._
 import play.core.parsers.Multipart.FileInfo
+
 import scala.concurrent.{ExecutionContext, Future}
 import cakesolutions.kafka.{KafkaProducer, KafkaProducerRecord}
 import cakesolutions.kafka.KafkaProducer.Conf
-import com.datastax.driver.core.Cluster
+import com.datastax.driver.core.{Cluster, Row}
 import com.github.nscala_time.time.Imports.DateTime
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import play.api.libs.functional.syntax.unlift
 import play.api.libs.json.{Format, __}
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
+
+import scala.collection.JavaConverters
 case class FormData(name: String)
 
 /**
@@ -72,7 +77,16 @@ class HomeController @Inject() (implicit val messagesApi: MessagesApi, ec: Execu
     */
   def table = Action { implicit request =>
     val rs = CassandraClient.getValueFromCassandraTable
-    Ok(views.html.table(rs))
+    val buffer = JavaConverters.asScalaBufferConverter(rs.all).asScala
+    val sortedBuffer = buffer.sortWith(sortByTime)
+    //rs.all.sort(timeComparator)
+    //Collections.sort(rs.all, Comparator.comparing(Row::getTimestamp("request_time")))
+    Ok(views.html.table(sortedBuffer))
+  }
+
+  def sortByTime(row1: Row, row2: Row) = {
+    //logger.trace("comparing %s and %s".format(row1, row2))
+    row1.getTimestamp("request_time").after(row2.getTimestamp("request_time"))
   }
 
   type FilePartHandler[A] = FileInfo => Accumulator[ByteString, FilePart[A]]
