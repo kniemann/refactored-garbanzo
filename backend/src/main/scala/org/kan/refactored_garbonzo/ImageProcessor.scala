@@ -8,7 +8,9 @@ import akka.kafka.ConsumerMessage.CommittableOffsetBatch
 import akka.kafka.scaladsl.Consumer
 import akka.kafka.{ConsumerSettings, Subscriptions}
 import akka.stream.ActorMaterializer
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSink
 import akka.stream.scaladsl.Sink
+import com.datastax.driver.core.{Cluster, PreparedStatement}
 import com.fasterxml.jackson.core.JsonParseException
 import com.typesafe.scalalogging.Logger
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -24,11 +26,12 @@ import play.api.libs.functional.syntax._
 /**
   * Created by kevin on 5/19/17.
   */
-trait ImageConsumerTrait {
+trait ImageProcessorTrait {
   val logger = Logger(this.getClass)
   val system = ActorSystem("sys")
   implicit val ec: ExecutionContextExecutor = system.dispatcher
   implicit val m: ActorMaterializer = ActorMaterializer.create(system)
+  implicit val session = Cluster.builder.addContactPoint("127.0.0.1").withPort(9042).build.connect()
 
   val maxPartitions = 100
 
@@ -38,7 +41,7 @@ trait ImageConsumerTrait {
     .withGroupId("images_consumer")
     .withProperty("auto.offset.reset", "earliest")
 
-  class ImageConsumerClass {
+  class ImageProcessorClass {
 
     private val offset = new AtomicLong
 
@@ -63,10 +66,10 @@ trait ImageConsumerTrait {
 
 
 // Consume messages at-least-once
-object ImageConsumer extends ImageConsumerTrait {
+object ImageProcessor extends ImageProcessorTrait {
   def main(args: Array[String]): Unit = {
 
-    val imageConsumer = new ImageConsumerClass
+    val imageProcessor = new ImageProcessorClass
 
     implicit val documentFormatter: Format[ImageMetadata] = (
       (__ \ "imageName").format[String] and
@@ -75,6 +78,10 @@ object ImageConsumer extends ImageConsumerTrait {
         (__ \ "uuid").format[String] and
         (__ \ "requestTime").format[DateTime]
       ) (ImageMetadata.apply, unlift(ImageMetadata.unapply))
+
+    val preparedStatement = session.prepare("INSERT INTO images.labels(uuid,image_name,source,label,probability,request_time) VALUES (?,?,?,?,?,?)")
+    val statementBinder = (imageLabel: ImageLabel, statement: PreparedStatement) => statement.bind(imageLabel)
+    val cassandraSink = CassandraSink[ImageLabel](parallelism = 2, preparedStatement, statementBinder)
 
     val done =
       Consumer.committablePartitionedSource(consumerSettings, Subscriptions.topics("images","upload_images"))
@@ -93,18 +100,29 @@ object ImageConsumer extends ImageConsumerTrait {
            case e@_ => logger.error("Unknown exception",e)
              None
          }
-         imageMetadataOpt match {
+         val imageLabel = imageMetadataOpt match {
             case Some(imageMetadata) => {
               logger.info(s"Received image: ${imageMetadata.imageName} / size of ${msg.record.value.length}")
               val prediction = LabelImage.labelImageFromBytes(msg.record.value())
                 .map(guess => (msg.record.key, guess))
-              prediction match {
+              val predictedMatch = prediction match {
                 case Some(result) => logger.info(s"Prediction is ${result}")
+                  ImageLabel(imageMetadata.imageName,
+                    imageMetadata.imageSize,
+                    imageMetadata.source,
+                    result._2._1,
+                    result._2._2,
+                    imageMetadata.uuid,
+                    imageMetadata.requestTime
+                  )
                 case o@_ => logger.info(s"Unable to find result: $o")
+                  None
               }
+              predictedMatch
             }
             case None => logger.error("Unable to deserialize image metadata")
          }
+         logger.info(s"Passing ImageLabel to Cassandra: $imageLabel ")
          Future{msg}
         }
         .batch(max = 20, first => CommittableOffsetBatch.empty.updated(first.committableOffset)) { (batch, elem) =>
@@ -112,6 +130,25 @@ object ImageConsumer extends ImageConsumerTrait {
         }
         .mapAsync(3)(_.commitScaladsl())
         .runWith(Sink.ignore)
+        //.runWith(cassandraSink)
     terminateWhenDone(done)
   }
 }
+
+case class ImageLabel(imageName: String,
+              imageSize: Int,
+              source: String,
+              label: String,
+              probability: Double,
+              uuid: String,
+              requestTime: DateTime)
+
+//CREATE_KEYSPACE images;
+//CREATE TABLE labels (
+//uuid uuid PRIMARY KEY,
+//image_name varchar,
+//source varchar,
+//label varchar,
+//probability double,
+//request_time timestamp
+//);
