@@ -175,10 +175,4 @@ object LabelImage {
       if (graph != null) graph.close()
     }
   }
-
-
-//  override def receive: Receive = {
-//    case LabelImageRequest(description, imageBytes) => logger.info("received test")
-//    case _      => logger.info("received unknown message")
-//  }
 }

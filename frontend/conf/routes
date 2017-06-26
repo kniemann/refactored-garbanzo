@@ -4,6 +4,8 @@
 
 GET     /                           controllers.HomeController.index
 
+GET     /table                      controllers.HomeController.table
+
 POST    /upload                     controllers.HomeController.upload
 
 # Map static resources from the /public folder to the /assets URL path

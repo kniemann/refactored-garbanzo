@@ -1,20 +1,20 @@
 package org.kan.refactored_garbonzo
 
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
 import akka.Done
 import akka.actor.ActorSystem
 import akka.kafka.ConsumerMessage.CommittableOffsetBatch
 import akka.kafka.scaladsl.Consumer
-import akka.kafka.{ConsumerSettings, Subscriptions}
+import akka.kafka.{ConsumerSettings, ProducerSettings, Subscriptions}
 import akka.stream.ActorMaterializer
-import akka.stream.alpakka.cassandra.scaladsl.CassandraSink
 import akka.stream.scaladsl.Sink
-import com.datastax.driver.core.{Cluster, PreparedStatement}
+import com.datastax.driver.core.Cluster
 import com.fasterxml.jackson.core.JsonParseException
 import com.typesafe.scalalogging.Logger
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer, StringSerializer}
 import play.api.libs.json.{Format, JsResultException, Json, __}
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -40,6 +40,9 @@ trait ImageProcessorTrait {
     .withBootstrapServers("localhost:9092")
     .withGroupId("images_consumer")
     .withProperty("auto.offset.reset", "earliest")
+
+  val producerSettings = ProducerSettings(system, new StringSerializer, new StringSerializer)
+    .withBootstrapServers("localhost:9092")
 
   class ImageProcessorClass {
 
@@ -79,9 +82,9 @@ object ImageProcessor extends ImageProcessorTrait {
         (__ \ "requestTime").format[DateTime]
       ) (ImageMetadata.apply, unlift(ImageMetadata.unapply))
 
-    val preparedStatement = session.prepare("INSERT INTO images.labels(uuid,image_name,source,label,probability,request_time) VALUES (?,?,?,?,?,?)")
-    val statementBinder = (imageLabel: ImageLabel, statement: PreparedStatement) => statement.bind(imageLabel)
-    val cassandraSink = CassandraSink[ImageLabel](parallelism = 2, preparedStatement, statementBinder)
+//    val preparedStatement = session.prepare("INSERT INTO images.labels(uuid,image_name,source,label,probability,request_time) VALUES (?,?,?,?,?,?)")
+//    val statementBinder = (imageLabel: ImageLabel, statement: PreparedStatement) => statement.bind(imageLabel)
+//    val cassandraSink = CassandraSink[ImageLabel](parallelism = 2, preparedStatement, statementBinder)
 
     val done =
       Consumer.committablePartitionedSource(consumerSettings, Subscriptions.topics("images","upload_images"))
@@ -100,29 +103,52 @@ object ImageProcessor extends ImageProcessorTrait {
            case e@_ => logger.error("Unknown exception",e)
              None
          }
-         val imageLabel = imageMetadataOpt match {
+         val imageLabel:Option[ImageLabel] = imageMetadataOpt match {
             case Some(imageMetadata) => {
               logger.info(s"Received image: ${imageMetadata.imageName} / size of ${msg.record.value.length}")
               val prediction = LabelImage.labelImageFromBytes(msg.record.value())
                 .map(guess => (msg.record.key, guess))
-              val predictedMatch = prediction match {
+              val predictedMatch:Option[ImageLabel] = prediction match {
                 case Some(result) => logger.info(s"Prediction is ${result}")
-                  ImageLabel(imageMetadata.imageName,
+                  Option(ImageLabel(imageMetadata.imageName,
                     imageMetadata.imageSize,
                     imageMetadata.source,
                     result._2._1,
                     result._2._2,
                     imageMetadata.uuid,
                     imageMetadata.requestTime
-                  )
+                  ))
                 case o@_ => logger.info(s"Unable to find result: $o")
                   None
               }
               predictedMatch
             }
             case None => logger.error("Unable to deserialize image metadata")
+             None
          }
-         logger.info(s"Passing ImageLabel to Cassandra: $imageLabel ")
+          val imageLabelActual = imageLabel.get
+          logger.info(s"Inserting ImageLabel to Cassandra: $imageLabel ${imageLabel.getClass}")
+          val preparedStatement = session.prepare(
+            "INSERT INTO images.labels (uuid,image_name,source,label,probability,request_time )" +
+            " values (?, ?, ?, ?, ?, ?)")
+          val boundedStatement = preparedStatement.bind()
+            .setUUID(0,UUID.fromString(imageLabelActual.uuid))
+            .setString(1,imageLabelActual.imageName)
+            .setString(2,imageLabelActual.source)
+            .setString(3,imageLabelActual.label)
+            .setDouble(4,imageLabelActual.probability)
+            .setTimestamp(5, imageLabelActual.requestTime.toDate)
+
+          val resultSet = session.execute(boundedStatement)
+          logger.info(s"SQL insert completed? ${resultSet.wasApplied()}")
+//          val create = withSchema { (authorId: String, title: String) =>
+//              cql"""
+//                 INSERT INTO images.labels (uuid,image_name,source,label,probability,request_time )
+//                 VALUES ( $authorId, now(), $title);
+//               """.prepared
+//          }
+
+         //Future{imageLabel}
          Future{msg}
         }
         .batch(max = 20, first => CommittableOffsetBatch.empty.updated(first.committableOffset)) { (batch, elem) =>
@@ -130,7 +156,7 @@ object ImageProcessor extends ImageProcessorTrait {
         }
         .mapAsync(3)(_.commitScaladsl())
         .runWith(Sink.ignore)
-        //.runWith(cassandraSink)
+        //.runWith(Sink.foreach(println))
     terminateWhenDone(done)
   }
 }
@@ -143,12 +169,3 @@ case class ImageLabel(imageName: String,
               uuid: String,
               requestTime: DateTime)
 
-//CREATE_KEYSPACE images;
-//CREATE TABLE labels (
-//uuid uuid PRIMARY KEY,
-//image_name varchar,
-//source varchar,
-//label varchar,
-//probability double,
-//request_time timestamp
-//);
