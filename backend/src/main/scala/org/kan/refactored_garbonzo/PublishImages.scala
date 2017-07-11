@@ -18,6 +18,8 @@ import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
 import play.api.libs.functional.syntax._
 
+import scala.annotation.tailrec
+
 /**
   * Created by kevin on 5/19/17.
   */

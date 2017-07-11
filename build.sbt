@@ -12,19 +12,20 @@ val scalaKafkaClientVersion = "0.10.2.2"
 val playVersion = "2.5.15"
 val scalatestVersion = "3.0.1"
 val sparkVersion = "2.1.1"
-val tensorflowVersion = "1.2.0"
+val tensorflowVersion = "1.2.1"
 val akkaStreamAlpakkaCassandraVersion = "0.9"
 val jacksonVersion = "2.8.8"
 val nscalaTimeVersion = "2.16.0"
 val scalaLoggingVersion = "3.5.0"
-val cassandraVersion = "3.2.0"
+val cassandraVersion = "3.3.0"
 
 val commonSettings = Seq(
   scalaVersion := "2.11.11",
   resolvers += "Apache Snapshot Repository" at "https://repository.apache.org/snapshots",
   resolvers += Resolver.bintrayRepo("cakesolutions", "maven"),
   resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases",
-  fork in run := true,
+  resolvers += "Artima Maven Repository" at "http://repo.artima.com/releases",
+    fork in run := true,
 
   libraryDependencies ++= Seq(
         "com.typesafe.akka" %% "akka-actor" % akkaVersion,

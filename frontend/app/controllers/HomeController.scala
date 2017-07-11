@@ -157,6 +157,7 @@ object CassandraClient {
   val session = cluster.connect()
 
   def getValueFromCassandraTable = {
+    //TODO async with future
     session.execute("SELECT * FROM images.labels")
   }
 }
